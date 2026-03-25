@@ -1,22 +1,24 @@
-# Task Plan - Admin Dashboard
+# Admin Dashboard UI Refinement Task Plan
 
-## Objective
-Establish a secure, high-utility management interface for Mohkohrey Travels that mirrors the main site's branding and handles all business logic.
+## Phase 1: Standardize Modal Experience (COMPLETED)
+- [x] **Modal Consistency**: Update `src/components/Modal.tsx` for responsive sizing and max-height constraints.
+- [x] **Scrollbar Support**: Add custom styles to `src/index.css` for cross-browser scrollbar aesthetics.
+- [x] **Viewport Fit**: Ensure modals don't overflow the screen; implement vertical scrolling for long forms.
 
-## Phases
-1. **Phase 1: Brand & Design System Sync** (Completed)
-   - [x] Clone repository.
-   - [x] Apply B.L.A.S.T Initialization Protocol.
-   - [x] Sync Branding Assets (Logo, Favicon).
-   - [x] Align Tailwind 4 Theme and Typography.
-2. **Phase 2: UI Foundation & Layout** (Pending)
-   - [ ] Refine Sidebar & Header interactions.
-   - [ ] Standardize UI components (Modals, Confirmation).
-3. **Phase 3: Route & Feature Alignment** (Pending)
-   - [ ] Implement Visa Management module.
-   - [ ] Implement Passport Services module.
-   - [ ] Implement Study Abroad module.
-   - [ ] Expand Bookings to handle Flight enquiries.
-4. **Phase 4: Optimization & Security**
-   - [ ] Implement Inactivity Timeout (5 mins).
-   - [ ] Audit RLS policies for Supabase integration.
+## Phase 2: Missing Creation Modals (COMPLETED)
+- [x] **Visa Management**: Add "New Application" modal with relevant fields.
+- [x] **Study Abroad**: Add "New Student Admission" modal.
+- [x] **Passport Service**: Add "New Passport Record" modal.
+
+## Phase 3: Service-Specific Branding (COMPLETED)
+- [x] **Visa (Green)**: Apply `#2BB673` branding.
+- [x] **Flights (Dark Grey)**: Apply `#1F1F1F` branding to Bookings.
+- [x] **Study Abroad (Blue)**: Apply `#0070F3` branding.
+- [x] **Passport (Teal)**: Apply `#008080` branding.
+
+## Current Status
+All UI refinement phases and core security measures are complete. Modals are now responsive and standardized, missing creation forms have been added, service-specific branding has been synchronized, and an inactivity timeout (5 mins) has been implemented globaly.
+
+## Phase 4: Final Cleanup & Security (COMPLETED)
+- [x] Audit responsive layouts for modals across mobile devices.
+- [x] Implement "Inactivity Logout" logic (5-minute timeout).

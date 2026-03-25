@@ -26,15 +26,15 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-2xl"
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className={`bg-surface-container-lowest rounded-3xl w-full ${maxWidth} shadow-xl border border-outline-variant/30 flex flex-col max-h-[90vh] relative z-10`}
+            className={`bg-surface-container-lowest rounded-3xl w-full ${maxWidth} shadow-xl border border-outline-variant/30 flex flex-col max-h-[calc(100vh-2rem)] md:max-h-[90vh] relative z-10`}
           >
-            <div className="flex justify-between items-center p-6 border-b border-outline-variant/20">
-              <h3 className="text-xl font-bold text-on-surface">{title}</h3>
+            <div className="flex justify-between items-center p-5 md:p-6 border-b border-outline-variant/20 shrink-0">
+              <h3 className="text-lg md:text-xl font-bold text-on-surface">{title}</h3>
               <button onClick={onClose} className="p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto">
+            <div className="p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0">
               {children}
             </div>
           </motion.div>

@@ -1,10 +1,66 @@
-import { useState } from "react";
-import { User, Shield, Bell, Globe, CreditCard, Save, Edit2, Check, Smartphone, Mail } from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Shield, Bell, Globe, CreditCard, Save, Edit2, Check, Smartphone, Mail, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "../lib/supabase";
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState("Profile Settings");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [profile, setProfile] = useState({
+    full_name: "",
+    email: "",
+    bio: ""
+  });
+
+  const fetchProfile = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+      if (data) {
+        setProfile({
+          full_name: data.full_name || "",
+          email: session.user.email || "",
+          bio: data.bio || ""
+        });
+      } else {
+        setProfile(prev => ({ ...prev, email: session.user.email || "" }));
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (session) {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: session.user.id,
+          full_name: profile.full_name,
+          bio: profile.bio,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Profile updated successfully!");
+        setIsEditingProfile(false);
+      }
+    }
+    setIsSaving(false);
+  };
 
   const tabs = [
     { name: "Profile Settings", icon: User },
@@ -25,11 +81,12 @@ export function Settings() {
             Configure your dashboard preferences and system settings.
           </p>
         </div>
-        <button 
-          onClick={() => toast.success("Settings saved successfully")}
-          className="px-5 py-2.5 rounded-full bg-primary text-on-primary font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20 flex items-center gap-2"
+        <button
+          onClick={handleSaveProfile}
+          disabled={isSaving}
+          className="px-5 py-2.5 rounded-full bg-primary text-on-primary font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20 flex items-center gap-2 disabled:opacity-50"
         >
-          <Save className="w-5 h-5" />
+          {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
           Save Changes
         </button>
       </div>
@@ -40,11 +97,10 @@ export function Settings() {
             <button
               key={i}
               onClick={() => setActiveTab(tab.name)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-left ${
-                activeTab === tab.name
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-left ${activeTab === tab.name
                   ? "bg-primary-container text-on-primary-container font-medium"
                   : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-              }`}
+                }`}
             >
               <tab.icon className="w-5 h-5" />
               <span className="text-sm">{tab.name}</span>
@@ -57,7 +113,7 @@ export function Settings() {
             <div className="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-on-surface">Profile Information</h2>
-                <button 
+                <button
                   onClick={() => setIsEditingProfile(!isEditingProfile)}
                   className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-sm font-medium transition-colors"
                 >
@@ -74,15 +130,12 @@ export function Settings() {
                   )}
                 </button>
               </div>
-              
+
               <div className="flex items-center gap-6 mb-8">
                 <div className="relative">
-                  <img
-                    src="https://picsum.photos/seed/admin/150/150"
-                    alt="Admin Profile"
-                    className="w-24 h-24 rounded-full object-cover border-2 border-primary-container"
-                    referrerPolicy="no-referrer"
-                  />
+                  <div className="w-24 h-24 rounded-full bg-primary-container text-primary flex items-center justify-center font-black text-3xl border-2 border-primary-container">
+                    {profile.full_name?.charAt(0) || "A"}
+                  </div>
                   {isEditingProfile && (
                     <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center border-2 border-surface-container-lowest hover:bg-primary/90 transition-colors">
                       <Edit2 className="w-4 h-4" />
@@ -90,40 +143,18 @@ export function Settings() {
                   )}
                 </div>
                 <div>
-                  <h3 className="font-bold text-on-surface text-lg">Admin User</h3>
+                  <h3 className="font-bold text-on-surface text-lg">{profile.full_name || "Admin User"}</h3>
                   <p className="text-on-surface-variant text-sm">Super Admin</p>
-                  {isEditingProfile && (
-                    <div className="mt-2 flex gap-2">
-                      <label className="px-4 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-sm font-medium transition-colors cursor-pointer">
-                        Change Photo
-                        <input type="file" className="sr-only" accept="image/*" onChange={() => toast.success("Photo updated")} />
-                      </label>
-                      <button 
-                        onClick={() => toast.success("Photo removed")}
-                        className="px-4 py-1.5 rounded-full text-error hover:bg-error-container/50 text-sm font-medium transition-colors"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-on-surface-variant">First Name</label>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-on-surface-variant">Full Name</label>
                   <input
                     type="text"
-                    defaultValue="Admin"
-                    disabled={!isEditingProfile}
-                    className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary text-sm text-on-surface disabled:opacity-70"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-on-surface-variant">Last Name</label>
-                  <input
-                    type="text"
-                    defaultValue="User"
+                    value={profile.full_name}
+                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
                     disabled={!isEditingProfile}
                     className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary text-sm text-on-surface disabled:opacity-70"
                   />
@@ -132,8 +163,8 @@ export function Settings() {
                   <label className="text-sm font-medium text-on-surface-variant">Email Address</label>
                   <input
                     type="email"
-                    defaultValue="admin@mohkohrey.com"
-                    disabled={!isEditingProfile}
+                    value={profile.email}
+                    disabled
                     className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary text-sm text-on-surface disabled:opacity-70"
                   />
                 </div>
@@ -141,7 +172,8 @@ export function Settings() {
                   <label className="text-sm font-medium text-on-surface-variant">Bio / Description</label>
                   <textarea
                     rows={4}
-                    defaultValue="Super administrator for Mohkohrey Travels."
+                    value={profile.bio}
+                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
                     disabled={!isEditingProfile}
                     className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary text-sm text-on-surface resize-none disabled:opacity-70"
                   ></textarea>
@@ -150,10 +182,11 @@ export function Settings() {
             </div>
           )}
 
+
           {activeTab === "Security & Passwords" && (
             <div className="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
               <h2 className="text-xl font-bold text-on-surface mb-6">Security Settings</h2>
-              
+
               <div className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider">Change Password</h3>
@@ -161,7 +194,7 @@ export function Settings() {
                     <input type="password" placeholder="Current Password" className="w-full max-w-md px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary text-sm text-on-surface" />
                     <input type="password" placeholder="New Password" className="w-full max-w-md px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary text-sm text-on-surface" />
                     <input type="password" placeholder="Confirm New Password" className="w-full max-w-md px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary text-sm text-on-surface" />
-                    <button 
+                    <button
                       onClick={() => toast.success("Password updated successfully")}
                       className="px-5 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-medium transition-colors text-sm"
                     >
@@ -184,7 +217,7 @@ export function Settings() {
                         <p className="text-sm text-on-surface-variant">Use an app like Google Authenticator to generate codes.</p>
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={() => toast.success("Two-Factor Authentication enabled")}
                       className="px-4 py-2 rounded-full bg-primary text-on-primary font-medium text-sm"
                     >
@@ -199,7 +232,7 @@ export function Settings() {
           {activeTab === "Notifications" && (
             <div className="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
               <h2 className="text-xl font-bold text-on-surface mb-6">Notification Preferences</h2>
-              
+
               <div className="space-y-6">
                 {[
                   { title: "New Bookings", desc: "Get notified when a new tour is booked.", email: true, push: true },
@@ -231,7 +264,7 @@ export function Settings() {
           {activeTab === "Payment Gateways" && (
             <div className="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
               <h2 className="text-xl font-bold text-on-surface mb-6">Payment Gateways</h2>
-              
+
               <div className="space-y-4">
                 <div className="p-5 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -262,7 +295,7 @@ export function Settings() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button 
+                    <button
                       onClick={() => toast.success("Redirecting to PayPal...")}
                       className="px-4 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-sm font-medium transition-colors"
                     >
@@ -277,7 +310,7 @@ export function Settings() {
           {activeTab === "Localization" && (
             <div className="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
               <h2 className="text-xl font-bold text-on-surface mb-6">Localization Settings</h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-on-surface-variant">Default Language</label>
