@@ -1,0 +1,18 @@
+{
+  "colors": {
+    "primary": "#005EB8",
+    "secondary": "#FFA000",
+    "background": "#FFFFFF",
+    "foreground": "#111827",
+    "muted": "#F3F4F6",
+    "accent": "#10B981"
+  },
+  "typography": {
+    "heading": "Montserrat",
+    "body": "Open Sans"
+  },
+  "spacing": {
+    "container_padding": "1rem",
+    "section_margin": "4rem"
+  }
+}
