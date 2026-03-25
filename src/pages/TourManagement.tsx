@@ -140,8 +140,9 @@ export function TourManagement() {
         slug: formData.title.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, ''),
         description: formData.description,
         base_price: parseFloat(formData.price.replace(/[^\d.]/g, '')),
-        // location and duration stored in a JSONB meta column or specific columns if you added them
-        itinerary: [], // Placeholder for expansion
+        location: formData.location,
+        duration: formData.duration,
+        itinerary: [],
         images: imageUrl ? [imageUrl] : [],
         is_active: true,
       };

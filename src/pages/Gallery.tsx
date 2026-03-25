@@ -15,7 +15,7 @@ export function Gallery() {
   const [newFile, setNewFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("TOURS");
+  const [category, setCategory] = useState("Tours & Trips");
 
   const fetchMedia = async () => {
     setIsLoading(true);
@@ -176,10 +176,10 @@ export function Gallery() {
             <div className="space-y-1.5">
               <label className="text-sm font-bold text-slate-700 uppercase tracking-widest text-[10px]">Category</label>
               <select value={category} onChange={e => setCategory(e.target.value)} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-[#005EB8]">
-                <option>TOURS</option>
-                <option>HOTELS</option>
-                <option>CULTURE</option>
-                <option>ADMIN</option>
+                <option>Tours & Trips</option>
+                <option>Visa Success</option>
+                <option>CEO Conferences</option>
+                <option>Testimonials</option>
               </select>
             </div>
           </div>
