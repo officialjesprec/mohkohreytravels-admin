@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Search, Filter, Eye, Edit2, MoreVertical, ChevronDown, Plus, Loader2 } from "lucide-react";
+import { Search, Filter, Eye, Edit2, MoreVertical, ChevronDown, Plus, Loader2, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { Modal } from "../components/Modal";
+import { ConfirmModal } from "../components/ConfirmModal";
+import { supabase } from "../lib/supabase";
 
 export function Bookings() {
   const [showFilters, setShowFilters] = useState(false);
@@ -10,21 +12,108 @@ export function Bookings() {
   const [isSaving, setIsSaving] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [reservationType, setReservationType] = useState("Flight Bookings");
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState<string | null>(null);
+
+  const fetchBookings = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setBookings(data || []);
+    }
+    setIsLoading(false);
+  };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-    return () => clearTimeout(timer);
+    fetchBookings();
   }, []);
 
-  const handleCreateReservation = async () => {
+  const updateBookingStatus = async (id: string, status: string) => {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ status })
+      .eq('id', id);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setBookings(bookings.map(b => b.id === id ? { ...b, status } : b));
+      toast.success(`Status updated to ${status}`);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (bookingToDelete) {
+      const { error } = await supabase.from('bookings').delete().eq('id', bookingToDelete);
+      if (error) {
+        toast.error(error.message);
+      } else {
+        setBookings(bookings.filter(b => b.id !== bookingToDelete));
+        toast.success("Booking deleted");
+      }
+    }
+    setDeleteModalOpen(false);
+    setBookingToDelete(null);
+  };
+
+  const handleCreateReservation = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsSaving(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    const formData = new FormData(e.target as HTMLFormElement);
+    const payload: any = {
+      type: reservationType,
+      status: 'PENDING',
+    };
+
+    if (reservationType === "Flight Bookings") {
+      payload.departure_city = formData.get('departure');
+      payload.destination_city = formData.get('destination');
+    } else if (reservationType === "Visa Processing" || reservationType === "Study Visa Processing") {
+      payload.destination_country = formData.get('country');
+      payload.passport_number = formData.get('passport');
+    } else if (reservationType === "International Passport") {
+      payload.application_type = formData.get('application_type');
+      payload.nin = formData.get('nin');
+    }
+
+    payload.full_name = formData.get('full_name');
+    payload.email = formData.get('email');
+    payload.phone = formData.get('phone');
+    payload.notes = formData.get('notes');
+
+    const { error } = await supabase.from('bookings').insert([payload]);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Reservation created successfully");
+      setCreateModalOpen(false);
+      fetchBookings();
+    }
     setIsSaving(false);
-    setCreateModalOpen(false);
-    toast.success("Reservation created successfully");
+  };
+
+  const filteredBookings = bookings.filter(b => {
+    const matchesStatus = statusFilter === 'All' || b.status === statusFilter.toUpperCase();
+    const matchesSearch = !searchQuery || 
+      b.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      b.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      b.id?.toString().includes(searchQuery);
+    return matchesStatus && matchesSearch;
+  });
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(amount);
   };
 
   return (
@@ -50,17 +139,29 @@ export function Bookings() {
       <div className="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div className="flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-2 md:pb-0">
-            <button className="px-4 py-2 rounded-full bg-brand-flights/10 text-brand-flights font-bold text-sm whitespace-nowrap border border-brand-flights/20">
-              All Bookings
+            <button 
+              onClick={() => setStatusFilter('All')}
+              className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-colors ${statusFilter === 'All' ? 'bg-brand-flights/10 text-brand-flights border border-brand-flights/20' : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'}`}
+            >
+              All ({bookings.length})
             </button>
-            <button className="px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant font-medium text-sm transition-colors whitespace-nowrap">
-              Pending
+            <button 
+              onClick={() => setStatusFilter('PENDING')}
+              className={`px-4 py-2 rounded-full font-medium text-sm transition-colors whitespace-nowrap ${statusFilter === 'PENDING' ? 'bg-brand-flights/10 text-brand-flights border border-brand-flights/20' : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'}`}
+            >
+              Pending ({bookings.filter(b => b.status === 'PENDING').length})
             </button>
-            <button className="px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant font-medium text-sm transition-colors whitespace-nowrap">
-              Confirmed
+            <button 
+              onClick={() => setStatusFilter('CONFIRMED')}
+              className={`px-4 py-2 rounded-full font-medium text-sm transition-colors whitespace-nowrap ${statusFilter === 'CONFIRMED' ? 'bg-green-500/10 text-green-600 border border-green-500/20' : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'}`}
+            >
+              Confirmed ({bookings.filter(b => b.status === 'CONFIRMED').length})
             </button>
-            <button className="px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant font-medium text-sm transition-colors whitespace-nowrap">
-              Cancelled
+            <button 
+              onClick={() => setStatusFilter('CANCELLED')}
+              className={`px-4 py-2 rounded-full font-medium text-sm transition-colors whitespace-nowrap ${statusFilter === 'CANCELLED' ? 'bg-red-500/10 text-red-600 border border-red-500/20' : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'}`}
+            >
+              Cancelled ({bookings.filter(b => b.status === 'CANCELLED').length})
             </button>
           </div>
           <div className="flex gap-3 w-full md:w-auto">
@@ -69,6 +170,8 @@ export function Bookings() {
               <input
                 type="text"
                 placeholder="Search ID, Name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 rounded-full bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights text-sm text-on-surface"
               />
             </div>
@@ -149,113 +252,68 @@ export function Bookings() {
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {[
-                  {
-                    id: "#BK-7829",
-                    customer: "Sarah Jenkins",
-                    email: "sarah.j@example.com",
-                    tour: "Bali Paradise Escape",
-                    date: "Oct 24, 2023",
-                    amount: "₦250,598",
-                    status: "Confirmed",
-                  },
-                  {
-                    id: "#BK-7830",
-                    customer: "Michael Chen",
-                    email: "m.chen@example.com",
-                    tour: "Swiss Alps Adventure",
-                    date: "Nov 12, 2023",
-                    amount: "₦575,798",
-                    status: "Pending",
-                  },
-                  {
-                    id: "#BK-7831",
-                    customer: "Emma Watson",
-                    email: "emma.w@example.com",
-                    tour: "Kyoto Cultural Tour",
-                    date: "Oct 18, 2023",
-                    amount: "₦155,599",
-                    status: "Confirmed",
-                  },
-                  {
-                    id: "#BK-7832",
-                    customer: "David Miller",
-                    email: "david.m@example.com",
-                    tour: "Safari Explorer",
-                    date: "Dec 05, 2023",
-                    amount: "₦640,400",
-                    status: "Cancelled",
-                  },
-                  {
-                    id: "#BK-7833",
-                    customer: "Jessica Taylor",
-                    email: "jess.t@example.com",
-                    tour: "Bali Paradise Escape",
-                    date: "Oct 28, 2023",
-                    amount: "₦125,299",
-                    status: "Pending",
-                  },
-                ].map((booking, i) => (
-                  <tr
-                    key={i}
-                    className="border-b border-outline-variant/10 hover:bg-surface-container-lowest/50 transition-colors group"
-                  >
-                    <td className="py-4 pl-4 font-bold text-brand-flights">
-                      {booking.id}
-                    </td>
-                    <td className="py-4">
-                      <p className="font-bold text-on-surface italic">
-                        {booking.customer}
-                      </p>
-                      <p className="text-xs text-on-surface-variant font-medium">
-                        {booking.email}
-                      </p>
-                    </td>
-                    <td className="py-4 text-on-surface-variant font-medium">
-                      {booking.tour}
-                    </td>
-                    <td className="py-4 text-on-surface-variant font-medium">
-                      {booking.date}
-                    </td>
-                    <td className="py-4 font-bold text-on-surface">
-                      {booking.amount}
-                    </td>
-                    <td className="py-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${booking.status === "Confirmed"
-                          ? "bg-success/10 text-success"
-                          : booking.status === "Pending"
-                            ? "bg-brand-flights/10 text-brand-flights"
-                            : "bg-error/10 text-error"
-                          }`}
-                      >
-                        {booking.status}
-                      </span>
-                    </td>
-                    <td className="py-4 pr-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => toast.info("Viewing booking details...")}
-                          className="p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => toast.info("Editing booking...")}
-                          className="p-2 rounded-full hover:bg-brand-flights/10 text-brand-flights transition-colors"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => toast.info("More options...")}
-                          className="p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant transition-colors"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </div>
+                {filteredBookings.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-on-surface-variant">
+                      {isLoading ? 'Loading bookings...' : 'No bookings found'}
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredBookings.map((booking) => (
+                    <tr
+                      key={booking.id}
+                      className="border-b border-outline-variant/10 hover:bg-surface-container-lowest/50 transition-colors group"
+                    >
+                      <td className="py-4 pl-4 font-bold text-brand-flights">
+                        #{booking.id?.slice(0, 8) || 'N/A'}
+                      </td>
+                      <td className="py-4">
+                        <p className="font-bold text-on-surface italic">
+                          {booking.full_name || 'N/A'}
+                        </p>
+                        <p className="text-xs text-on-surface-variant font-medium">
+                          {booking.email || 'N/A'}
+                        </p>
+                      </td>
+                      <td className="py-4 text-on-surface-variant font-medium">
+                        {booking.type || booking.destination_country || booking.departure_city || 'General'}
+                      </td>
+                      <td className="py-4 text-on-surface-variant font-medium">
+                        {booking.created_at ? new Date(booking.created_at).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="py-4 font-bold text-on-surface">
+                        {booking.amount ? formatCurrency(booking.amount) : 'N/A'}
+                      </td>
+                      <td className="py-4">
+                        <select
+                          value={booking.status || 'PENDING'}
+                          onChange={(e) => updateBookingStatus(booking.id, e.target.value)}
+                          className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border-0 outline-none cursor-pointer ${
+                            booking.status === 'CONFIRMED'
+                              ? 'bg-success/10 text-success'
+                              : booking.status === 'CANCELLED'
+                                ? 'bg-error/10 text-error'
+                                : 'bg-brand-flights/10 text-brand-flights'
+                          }`}
+                        >
+                          <option value="PENDING">Pending</option>
+                          <option value="CONFIRMED">Confirmed</option>
+                          <option value="CANCELLED">Cancelled</option>
+                        </select>
+                      </td>
+                      <td className="py-4 pr-4 text-right">
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => { setBookingToDelete(booking.id); setDeleteModalOpen(true); }}
+                            className="p-2 rounded-full hover:bg-error/10 text-error transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           )}
@@ -268,7 +326,7 @@ export function Bookings() {
         title="Create New Reservation"
         maxWidth="max-w-3xl"
       >
-        <div className="space-y-6">
+        <form onSubmit={handleCreateReservation} className="space-y-6">
           <div className="space-y-1.5">
             <label className="text-sm font-bold text-on-surface">Reservation Category</label>
             <select
@@ -286,79 +344,76 @@ export function Bookings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1.5">
               <label className="text-sm font-bold text-on-surface">Customer Name</label>
-              <input type="text" placeholder="Full Name" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
+              <input type="text" name="full_name" required placeholder="Full Name" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-bold text-on-surface">Email Address</label>
-              <input type="email" placeholder="Email" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
+              <input type="email" name="email" required placeholder="Email" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-bold text-on-surface">Phone Number</label>
-              <input type="tel" placeholder="Phone" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-on-surface">Date</label>
-              <input type="date" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
+              <input type="tel" name="phone" required placeholder="Phone" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
             </div>
           </div>
 
           {reservationType === "Flight Bookings" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 italic">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 bg-surface-container-lowest rounded-2xl border border-outline-variant/30">
               <div className="space-y-1.5">
                 <label className="text-sm font-bold text-on-surface">Departure City</label>
-                <input type="text" placeholder="e.g. New York (JFK)" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
+                <input type="text" name="departure" placeholder="e.g. Lagos (LOS)" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-bold text-on-surface">Destination City</label>
-                <input type="text" placeholder="e.g. London (LHR)" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
+                <input type="text" name="destination" placeholder="e.g. London (LHR)" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
               </div>
             </div>
           )}
 
           {(reservationType === "Visa Processing" || reservationType === "Study Visa Processing") && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 italic">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 bg-surface-container-lowest rounded-2xl border border-outline-variant/30">
               <div className="space-y-1.5">
                 <label className="text-sm font-bold text-on-surface">Destination Country</label>
-                <input type="text" placeholder="e.g. Canada" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
+                <input type="text" name="country" placeholder="e.g. Canada" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-bold text-on-surface">Passport Number</label>
-                <input type="text" placeholder="Passport No." className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
+                <input type="text" name="passport" placeholder="Passport No." className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
               </div>
             </div>
           )}
 
           {reservationType === "International Passport" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 italic">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 bg-surface-container-lowest rounded-2xl border border-outline-variant/30">
               <div className="space-y-1.5">
                 <label className="text-sm font-bold text-on-surface">Application Type</label>
-                <select className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights">
-                  <option>New Application</option>
-                  <option>Renewal</option>
-                  <option>Replacement</option>
+                <select name="application_type" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights">
+                  <option value="New Application">New Application</option>
+                  <option value="Renewal">Renewal</option>
+                  <option value="Replacement">Replacement</option>
                 </select>
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-bold text-on-surface">NIN (National Identity Number)</label>
-                <input type="text" placeholder="NIN" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
+                <input type="text" name="nin" placeholder="NIN" className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights" />
               </div>
             </div>
           )}
 
           <div className="space-y-1.5">
             <label className="text-sm font-bold text-on-surface">Additional Notes</label>
-            <textarea rows={3} className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights resize-none font-medium text-sm" placeholder="Any special requests or details..."></textarea>
+            <textarea name="notes" rows={3} className="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 focus:border-brand-flights focus:ring-1 focus:ring-brand-flights resize-none font-medium text-sm" placeholder="Any special requests or details..."></textarea>
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/20">
             <button
+              type="button"
               onClick={() => setCreateModalOpen(false)}
               className="px-5 py-2.5 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors"
             >
               Cancel
             </button>
             <button
-              onClick={handleCreateReservation}
+              type="submit"
               disabled={isSaving}
               className="px-5 py-2.5 rounded-full bg-brand-flights text-white font-bold hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
             >
@@ -366,8 +421,16 @@ export function Bookings() {
               {isSaving ? "Creating..." : "Create Reservation"}
             </button>
           </div>
-        </div>
+        </form>
       </Modal>
+
+      <ConfirmModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        title="Delete Booking"
+        message="Are you sure you want to permanently delete this booking? This action cannot be undone."
+      />
     </div>
   );
 }

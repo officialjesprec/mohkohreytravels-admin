@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Filter, Edit2, Trash2, Eye, MoreVertical, ArrowUpDown, Loader2, Upload, X } from "lucide-react";
+import { Plus, Search, Filter, Edit2, Trash2, Eye, MoreVertical, ArrowUpDown, Loader2, Upload, X, Save } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { Modal } from "../components/Modal";
@@ -15,6 +15,8 @@ export function TourManagement() {
   const [tourToDelete, setTourToDelete] = useState<string | null>(null);
   const [selectedTours, setSelectedTours] = useState<string[]>([]);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingTour, setEditingTour] = useState<any>(null);
 
   // Image handling
   const [newTourImage, setNewTourImage] = useState<File | null>(null);
@@ -27,6 +29,9 @@ export function TourManagement() {
     duration: "",
     price: "",
     description: "",
+    start_date: "",
+    end_date: "",
+    is_featured: false,
   });
 
   const fetchTours = async () => {
@@ -145,6 +150,9 @@ export function TourManagement() {
         itinerary: [],
         images: imageUrl ? [imageUrl] : [],
         is_active: true,
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null,
+        is_featured: formData.is_featured,
       };
 
       const { error } = await supabase.from('tours').insert([tourPayload]);
@@ -152,12 +160,79 @@ export function TourManagement() {
 
       toast.success("Tour package created and synced!");
       setCreateModalOpen(false);
-      setFormData({ title: "", location: "", duration: "", price: "", description: "" });
+      setFormData({ title: "", location: "", duration: "", price: "", description: "", start_date: "", end_date: "", is_featured: false });
       setNewTourImage(null);
       setImagePreview(null);
       fetchTours();
     } catch (error: any) {
       toast.error(error.message || "Failed to save tour");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditClick = (tour: any) => {
+    setEditingTour(tour);
+    setFormData({
+      title: tour.title || "",
+      location: tour.location || "",
+      duration: tour.duration || "",
+      price: tour.base_price?.toString() || "",
+      description: tour.description || "",
+      start_date: tour.start_date || "",
+      end_date: tour.end_date || "",
+      is_featured: tour.is_featured || false,
+    });
+    setImagePreview(tour.images?.[0] || null);
+    setEditModalOpen(true);
+  };
+
+  const handleUpdateTour = async () => {
+    if (!formData.title || !formData.price || !editingTour) {
+      toast.error("Title and Price are required");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      let imageUrl = editingTour.images?.[0] || "";
+
+      if (newTourImage) {
+        const uploadResult = await uploadToCloudinary(newTourImage, 'tours');
+        imageUrl = uploadResult.url;
+      }
+
+      const updatePayload: any = {
+        title: formData.title,
+        description: formData.description,
+        base_price: parseFloat(formData.price.replace(/[^\d.]/g, '')),
+        location: formData.location,
+        duration: formData.duration,
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null,
+        is_featured: formData.is_featured,
+      };
+
+      if (imageUrl) {
+        updatePayload.images = [imageUrl];
+      }
+
+      const { error } = await supabase
+        .from('tours')
+        .update(updatePayload)
+        .eq('id', editingTour.id);
+
+      if (error) throw error;
+
+      toast.success("Tour package updated successfully!");
+      setEditModalOpen(false);
+      setEditingTour(null);
+      setFormData({ title: "", location: "", duration: "", price: "", description: "", start_date: "", end_date: "", is_featured: false });
+      setNewTourImage(null);
+      setImagePreview(null);
+      fetchTours();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update tour");
     } finally {
       setIsSaving(false);
     }
@@ -237,6 +312,7 @@ export function TourManagement() {
                   </th>
                   <th className="pb-4">Tour Details</th>
                   <th className="pb-4">Base Price</th>
+                  <th className="pb-4">Featured</th>
                   <th className="pb-4">Status</th>
                   <th className="pb-4 pr-4 text-right">Actions</th>
                 </tr>
@@ -269,12 +345,24 @@ export function TourManagement() {
                       {new Intl.NumberFormat('en-NG', { style: 'currency', currency: tour.currency || 'NGN' }).format(tour.base_price)}
                     </td>
                     <td className="py-4">
+                      {tour.is_featured ? (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+                          Featured
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-xs">-</span>
+                      )}
+                    </td>
+                    <td className="py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${tour.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
                         {tour.is_active ? "Active" : "Draft"}
                       </span>
                     </td>
                     <td className="py-4 pr-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleEditClick(tour)} className="p-2 rounded-full hover:bg-[#005EB8]/10 text-[#005EB8] transition-colors">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
                         <button onClick={() => handleDeleteClick(tour.id)} className="p-2 rounded-full hover:bg-red-50 text-red-600 transition-colors">
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -384,6 +472,40 @@ export function TourManagement() {
             ></textarea>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">Start Date</label>
+              <input
+                type="date"
+                value={formData.start_date}
+                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">End Date</label>
+              <input
+                type="date"
+                value={formData.end_date}
+                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-xl border border-amber-200">
+            <input
+              type="checkbox"
+              id="is_featured"
+              checked={formData.is_featured}
+              onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })}
+              className="w-5 h-5 rounded border-amber-300 text-[#005EB8] focus:ring-[#005EB8]"
+            />
+            <label htmlFor="is_featured" className="text-sm font-bold text-slate-700 cursor-pointer">
+              Feature this tour in the hero section
+            </label>
+          </div>
+
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <button onClick={() => setCreateModalOpen(false)} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-700">Cancel</button>
             <button
@@ -393,6 +515,142 @@ export function TourManagement() {
             >
               {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
               {isSaving ? "Syncing..." : "Publish Tour"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={editModalOpen}
+        onClose={() => { setEditModalOpen(false); setEditingTour(null); }}
+        title="Edit Tour Package"
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">Tour Name</label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="e.g. Bali Paradise Escape"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">Price (NGN)</label>
+              <input
+                type="text"
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                placeholder="e.g. 500000"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">Location</label>
+              <input
+                type="text"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="e.g. Indonesia"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">Duration</label>
+              <input
+                type="text"
+                value={formData.duration}
+                onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                placeholder="e.g. 7 Days"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-bold text-slate-700">Tour Image</label>
+            <div className="mt-2 flex justify-center rounded-2xl border border-dashed border-slate-300 px-6 py-10 bg-slate-50 relative overflow-hidden group">
+              {imagePreview ? (
+                <>
+                  <img src={imagePreview} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button onClick={() => { setImagePreview(null); setNewTourImage(null); }} className="p-2 bg-red-600 text-white rounded-full">
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center">
+                  <Upload className="mx-auto h-12 w-12 text-slate-300" />
+                  <div className="mt-4 flex text-sm text-slate-500 justify-center font-bold">
+                    <label htmlFor="file-upload-edit" className="relative cursor-pointer text-[#005EB8] hover:opacity-80">
+                      <span>Upload a file</span>
+                      <input id="file-upload-edit" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
+                    </label>
+                    <p className="pl-1 text-slate-400">to auto-optimize</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-bold text-slate-700">Description</label>
+            <textarea
+              rows={4}
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none resize-none"
+              placeholder="Describe the tour package..."
+            ></textarea>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">Start Date</label>
+              <input
+                type="date"
+                value={formData.start_date}
+                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">End Date</label>
+              <input
+                type="date"
+                value={formData.end_date}
+                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-xl border border-amber-200">
+            <input
+              type="checkbox"
+              id="is_featured_edit"
+              checked={formData.is_featured}
+              onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })}
+              className="w-5 h-5 rounded border-amber-300 text-[#005EB8] focus:ring-[#005EB8]"
+            />
+            <label htmlFor="is_featured_edit" className="text-sm font-bold text-slate-700 cursor-pointer">
+              Feature this tour in the hero section
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <button onClick={() => { setEditModalOpen(false); setEditingTour(null); }} className="px-5 py-2.5 font-bold text-slate-500 hover:text-slate-700">Cancel</button>
+            <button
+              onClick={handleUpdateTour}
+              disabled={isSaving}
+              className="px-8 py-2.5 rounded-xl bg-[#005EB8] text-white font-bold hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isSaving ? "Updating..." : "Save Changes"}
             </button>
           </div>
         </div>

@@ -27,23 +27,6 @@ export function Header() {
         >
           <HelpCircle className="w-5 h-5" />
         </button>
-        <div className="h-8 w-px bg-primary/10 mx-2"></div>
-        <div className="flex items-center gap-3 cursor-pointer hover:bg-primary/5 p-1.5 pr-4 rounded-xl transition-colors group">
-          <img
-            src="https://picsum.photos/seed/admin/100/100"
-            alt="Admin Profile"
-            className="w-9 h-9 rounded-xl object-cover border border-primary/10 group-hover:border-secondary/30 transition-colors"
-            referrerPolicy="no-referrer"
-          />
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-primary leading-tight font-heading">
-              Admin User
-            </span>
-            <span className="text-[10px] text-primary/50 uppercase tracking-tighter">
-              Super Admin
-            </span>
-          </div>
-        </div>
       </div>
     </header>
   );
